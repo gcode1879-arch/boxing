@@ -23,7 +23,7 @@ button{margin-top:18px;font-size:18px;padding:12px 30px;border:0;border-radius:1
 <div id="cam"><video id="vid" playsinline muted></video><canvas id="ov2" width="200" height="150"></canvas></div>
 <div id="status">Waiting to start…</div>
 <div id="flash"></div>
-<div id="ov"><h1>🥊 Cam Boxing</h1>
+<div id="ov"><h1 style="display:flex;align-items:center;gap:12px"><svg width="72" height="72" viewBox="0 0 64 64" aria-hidden="true"><path d="M18 30c0-12 8-20 20-20s16 8 16 18c0 6-2 10-6 13v8H24v-8c-4-2-6-6-6-11z" fill="#e53935"/><path d="M14 30c-4 2-4 10 2 12 3 1 6-2 6-6z" fill="#b71c1c"/><rect x="22" y="48" width="26" height="9" rx="2" fill="#fff"/></svg> Cam Boxing</h1>
 <p>Stand back so your head, shoulders and arms are visible. Your character copies your arms: raise your right hand and he raises his right arm.</p>
 <p><b>Punch</b> by thrusting your fist toward the camera. <b>Block</b> by raising both fists in front of your face.</p>
 <p style="font-size:13px">No camera? Keyboard works too: Z / X punch, C to guard.</p>
@@ -39,7 +39,7 @@ const scene=new THREE.Scene();scene.background=new THREE.Color(0x0b0d12);scene.f
 const camera=new THREE.PerspectiveCamera(60,1,.1,50);
 function resize(){renderer.setSize(innerWidth,innerHeight);camera.aspect=innerWidth/innerHeight;camera.updateProjectionMatrix()}
 addEventListener('resize',resize);resize();
-const baseCam=V(0,2.15,2.4);camera.position.copy(baseCam);camera.lookAt(0,1.5,-2);
+const baseCam=V(0,2.4,2.9);camera.position.copy(baseCam);camera.lookAt(0,1.45,-1.6);
 scene.add(new THREE.HemisphereLight(0xffffff,0x223355,.8));
 const spot=new THREE.SpotLight(0xffffff,1.3,22,Math.PI/4,.5);spot.position.set(0,8,0);spot.castShadow=true;scene.add(spot);
 const mat=(c,r=.6)=>new THREE.MeshStandardMaterial({color:c,roughness:r});
@@ -51,41 +51,99 @@ const apron=new THREE.Mesh(new THREE.BoxGeometry(9.5,.2,9.5),mat(0x151821));apro
  [[0,-4,8,0],[0,4,8,0],[-4,0,8,1],[4,0,8,1]].forEach(([x,z,l,r])=>{
   const rope=new THREE.Mesh(new THREE.CylinderGeometry(.03,.03,l,6),mat(c));rope.position.set(x,y,z);rope.rotation.z=Math.PI/2;if(r)rope.rotation.y=Math.PI/2;scene.add(rope)})});
 // fighters
-const cylG=new THREE.CylinderGeometry(.07,.07,1,10);
-function limb(c){const m=new THREE.Mesh(cylG,mat(c));m.castShadow=true;scene.add(m);return m}
+const fill=new THREE.DirectionalLight(0xffd8b0,.55);fill.position.set(-3,4,4);scene.add(fill);
+const rim=new THREE.DirectionalLight(0x88aaff,.5);rim.position.set(3,3,-5);scene.add(rim);
 const UP=V(0,1,0);
-function setLimb(m,a,b){const d=b.clone().sub(a),l=Math.max(d.length(),.001);m.position.copy(a).addScaledVector(d,.5);m.scale.set(1,l,1);m.quaternion.setFromUnitVectors(UP,d.normalize())}
-function fighter(skin,trunk,glove){
- const g=new THREE.Group();
- const add=(geo,c,x,y,z)=>{const m=new THREE.Mesh(geo,mat(c));m.position.set(x,y,z);m.castShadow=true;g.add(m);return m};
- const torso=add(new THREE.BoxGeometry(.8,.8,.35),skin,0,1.4,0);
- const head=add(new THREE.SphereGeometry(.2,20,16),skin,0,2.02,0);
- add(new THREE.BoxGeometry(.8,.4,.38),trunk,0,.92,0);
- add(new THREE.BoxGeometry(.3,.75,.3),skin,-.2,.35,0);add(new THREE.BoxGeometry(.3,.75,.3),skin,.2,.35,0);
- scene.add(g);
- const arms=[-1,1].map(s=>({s,up:limb(skin),fo:limb(skin),gl:new THREE.Mesh(new THREE.SphereGeometry(.17,16,12),mat(glove,.4)),g:V(s*.3,1.4,-.3),prev:V(s*.3,1.4,-.3),cd:0}));
- arms.forEach(a=>{a.gl.castShadow=true;scene.add(a.gl)});
- return{g,torso,head,arms,mats:[torso.material,head.material]};
+const limbG=new THREE.CylinderGeometry(.82,1,1,14);
+function limb(m){const k=new THREE.Mesh(limbG,m);k.castShadow=true;scene.add(k);return k}
+function setLimb(m,a,b,r){const d=b.clone().sub(a),l=Math.max(d.length(),.001);m.position.copy(a).addScaledVector(d,.5);m.scale.set(r,l,r);m.quaternion.setFromUnitVectors(UP,d.normalize())}
+const S=()=>new THREE.SphereGeometry(1,24,16);
+function fighter(o){
+ const skin=new THREE.MeshStandardMaterial({color:o.skin,roughness:.65});
+ const skinD=new THREE.MeshStandardMaterial({color:new THREE.Color(o.skin).multiplyScalar(.85),roughness:.7});
+ const trunk=mat(o.trunk,.5),glove=mat(o.glove,.35),hair=mat(o.hair,.9),white=mat(0xf4f4f4,.5),dark=mat(0x181818,.5),boot=mat(o.boot,.6);
+ const g=new THREE.Group();scene.add(g);
+ const add=(geo,m,x,y,z,sx=1,sy=1,sz=1,par=g)=>{const k=new THREE.Mesh(geo,m);k.position.set(x,y,z);k.scale.set(sx,sy,sz);k.castShadow=true;par.add(k);return k};
+ // torso
+ add(S(),skin,0,1.55,0,.46,.34,.26);
+ add(S(),skin,-.2,1.58,.17,.21,.14,.12);add(S(),skin,.2,1.58,.17,.21,.14,.12);
+ add(S(),skinD,-.25,1.5,-.18,.2,.2,.1);add(S(),skinD,.25,1.5,-.18,.2,.2,.1);
+ add(new THREE.CylinderGeometry(.3,.24,.5,20),skin,0,1.15,0,1,1,.75);
+ [1.27,1.15,1.03].forEach(y=>[-.07,.07].forEach(x=>add(S(),skinD,x,y,.17,.06,.05,.03)));
+ add(new THREE.CylinderGeometry(.08,.1,.16,12),skin,0,1.84,0);
+ add(S(),skin,0,1.78,-.02,.3,.1,.14);
+ [-1,1].forEach(s=>add(S(),skin,s*.43,1.68,0,.13,.13,.13));
+ // shorts
+ add(new THREE.CylinderGeometry(.31,.35,.42,22),trunk,0,.88,0,1,1,.8);
+ add(new THREE.CylinderGeometry(.32,.32,.07,22),white,0,1.07,0,1,1,.8);
+ [-1,1].forEach(s=>add(new THREE.BoxGeometry(.02,.4,.12),white,s*.335,.88,0));
+ // legs
+ [-1,1].forEach(s=>{
+  add(new THREE.CylinderGeometry(.13,.1,.4,14),skin,s*.15,.55,0);
+  add(S(),skin,s*.15,.37,.01,.1,.1,.1);
+  add(new THREE.CylinderGeometry(.085,.065,.32,14),skin,s*.15,.23,0);
+  add(new THREE.BoxGeometry(.14,.12,.3),boot,s*.15,.1,.05);
+  add(new THREE.BoxGeometry(.15,.035,.31),white,s*.15,.02,.05);
+ });
+ // head
+ const hg=new THREE.Group();hg.position.set(0,1.98,0);g.add(hg);
+ add(S(),skin,0,0,0,.18,.225,.2,hg);
+ add(S(),skin,0,-.1,.04,.14,.12,.15,hg);
+ [-1,1].forEach(s=>{
+  add(S(),skin,s*.18,-.005,0,.03,.055,.03,hg);
+  add(S(),white,s*.07,.04,.172,.035,.025,.02,hg);
+  add(S(),dark,s*.07,.04,.19,.015,.015,.01,hg);
+  const br=add(new THREE.BoxGeometry(.075,.014,.016),hair,s*.07,.088,.172,1,1,1,hg);br.rotation.z=-s*.18;
+ });
+ add(S(),skinD,0,-.02,.2,.025,.04,.03,hg);
+ add(new THREE.BoxGeometry(.07,.012,.012),dark,0,-.088,.188,1,1,1,hg);
+ add(S(),hair,0,.04,-.03,.195,.23,.2,hg);
+ // arms + gloves
+ const arms=[-1,1].map(s=>{
+  const gl=new THREE.Group();scene.add(gl);
+  add(S(),glove,0,.13,0,.17,.185,.16,gl);
+  add(S(),glove,-s*.11,.1,.03,.07,.1,.07,gl);
+  add(new THREE.CylinderGeometry(.095,.1,.11,16),white,0,-.02,0,1,1,1,gl);
+  const el=add(S(),skin,0,0,0,.07,.07,.07,scene);
+  return{s,up:limb(skin),fo:limb(skin),el,gl,g:V(s*.3,1.4,-.3),prev:V(s*.3,1.4,-.3),cd:0};
+ });
+ return{g,head:hg,arms,mats:[skin,trunk,glove,hair]};
 }
-const player=fighter(0xe0a878,0x2255cc,0xdd2222);player.g.position.set(0,0,0);
-const opp=fighter(0xb87c5a,0x22aa44,0x2244dd);opp.g.position.set(0,0,-1.55);
-function drawArm(a,sh,out){a.gl.position.copy(a.g);
+const player=fighter({skin:0xe3b08a,trunk:0xd62828,glove:0xe53935,hair:0x3b2314,boot:0xf2f2f2});
+player.g.rotation.y=Math.PI;
+const opp=fighter({skin:0xa86f4c,trunk:0x1f5fd6,glove:0x1f5fd6,hair:0x111111,boot:0x151515});opp.g.position.set(0,0,-1.55);
+function drawArm(a,sh,out){
  const mid=sh.clone().add(a.g).multiplyScalar(.5);mid.add(V(a.s*.12*out,-.22,0));
- setLimb(a.up,sh,mid);setLimb(a.fo,mid,a.g)}
+ setLimb(a.up,sh,mid,.075);setLimb(a.fo,mid,a.g,.062);
+ a.el.position.copy(mid);a.gl.position.copy(a.g);
+ a.gl.quaternion.setFromUnitVectors(UP,a.g.clone().sub(mid).normalize());
+}
 // state
 let hpY=100,hpO=100,running=false,over=false,shake=0,hitFlash=0;
-let cam={active:false,lastSeen:0,L:null,R:null,guard:false};
+let cam={active:false,lastSeen:-1e9,L:null,R:null,guard:false};
 const keys={z:0,x:0,c:0};
 addEventListener('keydown',e=>{const k=e.key.toLowerCase();if(k==='z'&&!keys.z)keys.z=.001;if(k==='x'&&!keys.x)keys.x=.001;if(k==='c')keys.c=1});
 addEventListener('keyup',e=>{if(e.key.toLowerCase()==='c')keys.c=0});
+const TROPHY='<svg width="72" height="72" viewBox="0 0 64 64" aria-hidden="true"><path d="M20 10h24v14c0 9-6 15-12 15s-12-6-12-15z" fill="#ffc83d"/><path d="M20 14h-8c0 8 4 12 10 12M44 14h8c0 8-4 12-10 12" fill="none" stroke="#ffc83d" stroke-width="4"/><rect x="28" y="38" width="8" height="8" fill="#ffc83d"/><rect x="20" y="46" width="24" height="8" rx="2" fill="#c9971c"/></svg>',KO='<svg width="72" height="72" viewBox="0 0 64 64" aria-hidden="true"><circle cx="32" cy="32" r="24" fill="#ffc83d"/><path d="M20 22l8 8M28 22l-8 8M36 22l8 8M44 22l-8 8" stroke="#222" stroke-width="3" stroke-linecap="round"/><path d="M22 44c6-5 14-5 20 0" stroke="#222" stroke-width="3" fill="none" stroke-linecap="round"/></svg>';
 const status=t=>$('status').textContent=t;
 // pose
+const LEN={L:{u:.6,f:.6},R:{u:.6,f:.6}};
 function onRes(r){
  const lm=r.poseLandmarks;const c=$('ov2').getContext('2d');c.clearRect(0,0,200,150);
  if(!lm){return}
  cam.lastSeen=performance.now();
- const side=(s,w)=>({x:s.x-w.x,y:s.y-w.y,z:s.z-w.z});
- cam.L=side(lm[11],lm[15]);cam.R=side(lm[12],lm[16]);
+ const sw=Math.max(.05,Math.hypot(lm[11].x-lm[12].x,lm[11].y-lm[12].y));
+ const arm=(i,S,E,W)=>{const sh=lm[S],el=lm[E],wr=lm[W];
+  if((wr.visibility??1)<.3||(el.visibility??1)<.3)return cam[i];
+  const su=Math.hypot(el.x-sh.x,el.y-sh.y)/sw,sf=Math.hypot(wr.x-el.x,wr.y-el.y)/sw;
+  const m=LEN[i];m.u=Math.max(m.u*.9995,su,.5);m.f=Math.max(m.f*.9995,sf,.5);
+  const du=Math.sqrt(Math.max(0,m.u*m.u-su*su)),df=Math.sqrt(Math.max(0,m.f*m.f-sf*sf));
+  const sg=d=>d<-.2?-.3:1;
+  const geo=du*sg((sh.z-el.z)/sw)+df*sg((el.z-wr.z)/sw);
+  const mpz=(sh.z-wr.z)/sw;
+  return{x:(sh.x-wr.x)/sw,y:(sh.y-wr.y)/sw,z:.6*geo+.4*mpz};
+ };
+ cam.L=arm('L',11,13,15);cam.R=arm('R',12,14,16);
  const nose=lm[0];
  cam.guard=lm[15].y<nose.y+.12&&lm[16].y<nose.y+.12&&lm[15].visibility>.4&&lm[16].visibility>.4;
  c.strokeStyle='#4dd37a';c.lineWidth=3;c.fillStyle='#ff4d4d';
@@ -101,41 +159,42 @@ async function startCam(){
   const pose=new Pose({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/'+f});
   pose.setOptions({modelComplexity:1,smoothLandmarks:true,minDetectionConfidence:.5,minTrackingConfidence:.5});
   pose.onResults(onRes);await pose.initialize();
-  status('Camera on. Keep your upper body in frame.');
+  status('Camera on. Keep your upper body in frame and move your arms around for a few seconds to calibrate.');
   const loop=async()=>{if(v.readyState>=2)await pose.send({image:v});requestAnimationFrame(loop)};loop();
  }catch(e){console.warn(e);status('Camera unavailable. Keyboard: Z / X punch, C guard.')}
 }
 // game flow
 function reset(){hpY=hpO=100;over=false;oState='idle';oT=1.5;$('ov').style.display='none';running=true}
 $('go').onclick=()=>{if(!window._camStarted){window._camStarted=true;startCam()}reset()};
-function end(win){over=true;running=false;const o=$('ov');o.style.display='flex';
- o.innerHTML=`<h1>${win?'🏆 KO! You win':'💀 You got knocked out'}</h1><button id="again">Fight again</button>`;
+function end(win){if(over)return;over=true;running=false;const o=$('ov');o.style.display='flex';
+ o.innerHTML=`${win?TROPHY:KO}<h1 style="color:${win?'#4dd37a':'#ff5252'}">${win?'VICTORY':'DEFEAT'}</h1><p>${win?'You knocked out your opponent!':'You got knocked out. Keep your guard up!'}</p><button id="again">Fight again</button>`;
  $('again').onclick=reset}
 // opponent AI
 let oState='idle',oT=1.5,oArm=null,oX=0,t0=0,oHit=0;
 const K=4.6;
 function update(dt,now){
  t0+=dt;
- const camOn=now-cam.lastSeen<500;
+ const camOn=now-cam.lastSeen<500&&!!cam.L&&!!cam.R;
  // player gloves
  const guardOn=(camOn&&cam.guard)||keys.c;
  player.arms.forEach(a=>{
   const sh=V(a.s*.42,1.7,0);
   let tg;
   if(camOn){const r=a.s<0?cam.L:cam.R;
-   tg=V(sh.x+r.x*K,sh.y+r.y*K,sh.z-r.z*K*1.6);}
+   tg=V(sh.x+r.x*.65,sh.y+r.y*.65,sh.z-.3-r.z*.65*1.3);}
   else tg=V(a.s*.3,1.45,-.35);
   const kp=a.s<0?'z':'x';
   if(keys[kp]>0){keys[kp]+=dt;const p=keys[kp]/.3;if(p>=1)keys[kp]=0;else tg.z-=1.3*Math.sin(p*Math.PI)}
   if(keys.c&&!camOn)tg.set(a.s*.2,1.95,-.4);
-  tg.y=Math.max(tg.y,.5);
+  tg.y=Math.max(tg.y,.5);tg.z=Math.min(tg.z,-.35);
   const d=tg.clone().sub(sh);if(d.length()>1.25)tg=sh.clone().add(d.setLength(1.25));
-  a.prev.copy(a.g);a.g.lerp(tg,Math.min(1,dt*22));
+  a.g.lerp(tg,Math.min(1,dt*16));
   drawArm(a,sh,1);
   // hit check
   a.cd-=dt;
-  const vz=(a.prev.z-a.g.z)/dt;
-  if(running&&a.cd<=0&&vz>2.6&&a.g.z<-1.05&&Math.abs(a.g.x-opp.g.position.x)<.6&&a.g.y>.9&&a.g.y<2.4){
+  const h=(a.h=a.h||[]);h.push({t:now,z:a.g.z});while(h.length>2&&now-h[0].t>150)h.shift();
+  const vz=h.length>2?(h[0].z-a.g.z)/Math.max(.03,(now-h[0].t)/1000):0;
+  if(running&&a.cd<=0&&vz>2.4&&a.g.z<-1.05&&Math.abs(a.g.x-opp.g.position.x)<.6&&a.g.y>.9&&a.g.y<2.4){
    a.cd=.35;const dmg=4+Math.min(vz,9);hpO=Math.max(0,hpO-dmg);oHit=.25;shake=.15;
    if(hpO<=0)end(true)}
  });
@@ -153,11 +212,11 @@ function update(dt,now){
   let tg=V(ox+a.s*.28,1.8,oz+.4);
   if(oArm===i&&oState==='wind')tg=V(ox+a.s*.5,1.65,oz+.05);
   if(oArm===i&&oState==='strike'){const p=1-oT/.22;tg=V(a.s*.15,1.85,oz+.1+p*1.0);
-   if(p>.6&&!opp._hit){opp._hit=true;const dmg=guardOn?2:9;hpY=Math.max(0,hpY-dmg);
+   if(running&&p>.6&&!opp._hit){opp._hit=true;const dmg=guardOn?2:9;hpY=Math.max(0,hpY-dmg);
     $('flash').style.opacity=guardOn?.12:.45;setTimeout(()=>$('flash').style.opacity=0,120);shake=guardOn?.05:.2;
     if(hpY<=0)end(false)}}
   a.g.lerp(tg,Math.min(1,dt*(oState==='strike'?30:12)));drawArm(a,sh,-1)});
- opp.head.rotation.z=Math.sin(t0*2)*.05;
+ opp.head.rotation.z=Math.sin(t0*2)*.05;opp.head.rotation.x=oHit>0?-.35:0;
  // camera shake
  shake=Math.max(0,shake-dt*.6);
  camera.position.set(baseCam.x+(Math.random()-.5)*shake,baseCam.y+(Math.random()-.5)*shake,baseCam.z);
