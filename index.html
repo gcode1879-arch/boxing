@@ -10,7 +10,7 @@ canvas#c{display:block;width:100%;height:100%}
 .bar div{height:16px;background:#ffffff22;border-radius:8px;overflow:hidden;margin-top:4px}
 .bar i{display:block;height:100%;width:100%;transition:width .15s}
 #you i{background:#4dd37a}#opp i{background:#ff5252}
-#cam{position:fixed;left:12px;bottom:12px;width:200px;height:150px;border-radius:10px;overflow:hidden;border:2px solid #ffffff33;background:#000}
+#cam{position:fixed;left:12px;bottom:12px;width:min(44vw,440px);aspect-ratio:4/3;border-radius:10px;overflow:hidden;border:2px solid #ffffff33;background:#000;cursor:pointer;transition:width .2s}#cam.big{width:min(80vw,760px)}
 #cam video,#cam canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);object-fit:cover}
 #status{position:fixed;right:12px;bottom:12px;max-width:50%;font-size:13px;opacity:.85;text-align:right}
 #flash{position:fixed;inset:0;background:#f00;opacity:0;pointer-events:none;transition:opacity .25s}
@@ -26,7 +26,7 @@ button{margin-top:18px;font-size:18px;padding:12px 30px;border:0;border-radius:1
 <div id="ov"><h1 style="display:flex;align-items:center;gap:12px"><svg width="72" height="72" viewBox="0 0 64 64" aria-hidden="true"><path d="M18 30c0-12 8-20 20-20s16 8 16 18c0 6-2 10-6 13v8H24v-8c-4-2-6-6-6-11z" fill="#e53935"/><path d="M14 30c-4 2-4 10 2 12 3 1 6-2 6-6z" fill="#b71c1c"/><rect x="22" y="48" width="26" height="9" rx="2" fill="#fff"/></svg> Cam Boxing</h1>
 <p>Stand back so your head, shoulders and arms are visible. Your character copies your arms: raise your right hand and he raises his right arm.</p>
 <p><b>Punch</b> by thrusting your fist toward the camera. <b>Block</b> by raising both fists in front of your face.</p>
-<p style="font-size:13px">No camera? Keyboard works too: Z / X punch, C to guard.</p>
+<p><b>Elbow strikes</b> count too, but only when he steps in close. Click the camera preview to make it bigger.</p><p style="font-size:13px">No camera? Keyboard works too: Z / X punch, C to guard.</p>
 <button id="go">Start fight</button></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/pose.js" crossorigin="anonymous"></script>
@@ -105,7 +105,7 @@ function fighter(o){
   add(S(),glove,-s*.11,.1,.03,.07,.1,.07,gl);
   add(new THREE.CylinderGeometry(.095,.1,.11,16),white,0,-.02,0,1,1,1,gl);
   const el=add(S(),skin,0,0,0,.07,.07,.07,scene);
-  return{s,up:limb(skin),fo:limb(skin),el,gl,g:V(s*.3,1.4,-.3),prev:V(s*.3,1.4,-.3),cd:0};
+  return{s,up:limb(skin),fo:limb(skin),el,gl,g:V(s*.3,1.4,-.3),e:V(s*.4,1.2,-.1),useE:false,prev:V(s*.3,1.4,-.3),cd:0};
  });
  return{g,head:hg,arms,mats:[skin,trunk,glove,hair]};
 }
@@ -113,7 +113,7 @@ const player=fighter({skin:0xe3b08a,trunk:0xd62828,glove:0xe53935,hair:0x3b2314,
 player.g.rotation.y=Math.PI;
 const opp=fighter({skin:0xa86f4c,trunk:0x1f5fd6,glove:0x1f5fd6,hair:0x111111,boot:0x151515});opp.g.position.set(0,0,-1.55);
 function drawArm(a,sh,out){
- const mid=sh.clone().add(a.g).multiplyScalar(.5);mid.add(V(a.s*.12*out,-.22,0));
+ const mid=a.useE?a.e.clone():sh.clone().add(a.g).multiplyScalar(.5).add(V(a.s*.12*out,-.22,0));
  setLimb(a.up,sh,mid,.075);setLimb(a.fo,mid,a.g,.062);
  a.el.position.copy(mid);a.gl.position.copy(a.g);
  a.gl.quaternion.setFromUnitVectors(UP,a.g.clone().sub(mid).normalize());
@@ -129,7 +129,7 @@ const status=t=>$('status').textContent=t;
 // pose
 const LEN={L:{u:.6,f:.6},R:{u:.6,f:.6}};
 function onRes(r){
- const lm=r.poseLandmarks;const c=$('ov2').getContext('2d');c.clearRect(0,0,200,150);
+ const lm=r.poseLandmarks;const c=$('ov2').getContext('2d');c.clearRect(0,0,c.canvas.width,c.canvas.height);
  if(!lm){return}
  cam.lastSeen=performance.now();
  const sw=Math.max(.05,Math.hypot(lm[11].x-lm[12].x,lm[11].y-lm[12].y));
@@ -141,20 +141,22 @@ function onRes(r){
   const sg=d=>d<-.2?-.3:1;
   const geo=du*sg((sh.z-el.z)/sw)+df*sg((el.z-wr.z)/sw);
   const mpz=(sh.z-wr.z)/sw;
-  return{x:(sh.x-wr.x)/sw,y:(sh.y-wr.y)/sw,z:.6*geo+.4*mpz};
+  const dzu=(sh.z-el.z)/sw;
+  const o={x:(sh.x-wr.x)/sw,y:(sh.y-wr.y)/sw,z:.6*geo+.4*mpz,ex:(sh.x-el.x)/sw,ey:(sh.y-el.y)/sw,ez:.6*du*sg(dzu)+.4*dzu};
+  return Object.values(o).every(isFinite)?o:cam[i];
  };
  cam.L=arm('L',11,13,15);cam.R=arm('R',12,14,16);
  const nose=lm[0];
  cam.guard=lm[15].y<nose.y+.12&&lm[16].y<nose.y+.12&&lm[15].visibility>.4&&lm[16].visibility>.4;
- c.strokeStyle='#4dd37a';c.lineWidth=3;c.fillStyle='#ff4d4d';
- [[11,12],[11,13],[13,15],[12,14],[14,16]].forEach(([a,b])=>{c.beginPath();c.moveTo(lm[a].x*200,lm[a].y*150);c.lineTo(lm[b].x*200,lm[b].y*150);c.stroke()});
- [15,16,0].forEach(i=>{c.beginPath();c.arc(lm[i].x*200,lm[i].y*150,5,0,7);c.fill()});
+ const W=c.canvas.width,H=c.canvas.height;c.lineWidth=Math.max(3,W/160);c.strokeStyle='#4dd37a';
+ [[11,12],[11,13],[13,15],[12,14],[14,16],[11,23],[12,24],[23,24]].forEach(([a,b])=>{c.beginPath();c.moveTo(lm[a].x*W,lm[a].y*H);c.lineTo(lm[b].x*W,lm[b].y*H);c.stroke()});
+ [[0,'#fff'],[13,'#ffa500'],[14,'#ffa500'],[15,'#ff4d4d'],[16,'#ff4d4d']].forEach(([i,col])=>{c.fillStyle=col;c.beginPath();c.arc(lm[i].x*W,lm[i].y*H,Math.max(5,W/70),0,7);c.fill()});
 }
 async function startCam(){
  try{
   if(typeof Pose==='undefined')throw new Error('MediaPipe failed to load');
-  const s=await navigator.mediaDevices.getUserMedia({video:{width:640,height:480,facingMode:'user'}});
-  const v=$('vid');v.srcObject=s;await v.play();
+  const s=await navigator.mediaDevices.getUserMedia({video:{width:{ideal:1280},height:{ideal:720},facingMode:'user'}});
+  const v=$('vid');v.srcObject=s;await v.play();const cv=$('ov2');cv.width=v.videoWidth||640;cv.height=v.videoHeight||480;$('cam').style.aspectRatio=cv.width+'/'+cv.height;$('cam').title='Click to resize';
   status('Loading body tracker…');
   const pose=new Pose({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/'+f});
   pose.setOptions({modelComplexity:1,smoothLandmarks:true,minDetectionConfidence:.5,minTrackingConfidence:.5});
@@ -165,6 +167,7 @@ async function startCam(){
 }
 // game flow
 function reset(){hpY=hpO=100;over=false;oState='idle';oT=1.5;$('ov').style.display='none';running=true}
+$('cam').onclick=()=>$('cam').classList.toggle('big');
 $('go').onclick=()=>{if(!window._camStarted){window._camStarted=true;startCam()}reset()};
 function end(win){if(over)return;over=true;running=false;const o=$('ov');o.style.display='flex';
  o.innerHTML=`${win?TROPHY:KO}<h1 style="color:${win?'#4dd37a':'#ff5252'}">${win?'VICTORY':'DEFEAT'}</h1><p>${win?'You knocked out your opponent!':'You got knocked out. Keep your guard up!'}</p><button id="again">Fight again</button>`;
@@ -172,35 +175,56 @@ function end(win){if(over)return;over=true;running=false;const o=$('ov');o.style
 // opponent AI
 let oState='idle',oT=1.5,oArm=null,oX=0,t0=0,oHit=0;
 const K=4.6;
+function track(a,key,pos,now,dt){
+ const h=(a[key]=a[key]||[]);h.push({t:now,p:pos.clone()});
+ while(h.length>2&&now-h[0].t>130)h.shift();
+ let v=0;
+ if(h.length>2){const o=h[0],ds=Math.max(.03,(now-o.t)/1000);
+  const dir=V(opp.g.position.x-pos.x,0,opp.g.position.z-pos.z).normalize();
+  v=pos.clone().sub(o.p).dot(dir)/ds;}
+ const k='pk'+key;a[k]=Math.max(isFinite(v)?v:0,(a[k]||0)-dt*5);return a[k];
+}
 function update(dt,now){
  t0+=dt;
+ oX=Math.sin(t0*.9)*.45;opp.g.position.x=oX;
+ const oz=-1.5+.5*(.5+.5*Math.sin(t0*.4))+(oHit>0?-.12:0);opp.g.position.z=oz;const ox=oX;
  const camOn=now-cam.lastSeen<500&&!!cam.L&&!!cam.R;
- // player gloves
  const guardOn=(camOn&&cam.guard)||keys.c;
  player.arms.forEach(a=>{
   const sh=V(a.s*.42,1.7,0);
-  let tg;
+  let tg,te=null;
   if(camOn){const r=a.s<0?cam.L:cam.R;
-   tg=V(sh.x+r.x*.65,sh.y+r.y*.65,sh.z-.3-r.z*.65*1.3);}
+   tg=V(sh.x+r.x*.65,sh.y+r.y*.65,sh.z-.3-r.z*.65*1.3);
+   te=V(sh.x+r.ex*.65,sh.y+r.ey*.65,sh.z-.15-r.ez*.65*1.3);}
   else tg=V(a.s*.3,1.45,-.35);
   const kp=a.s<0?'z':'x';
   if(keys[kp]>0){keys[kp]+=dt;const p=keys[kp]/.3;if(p>=1)keys[kp]=0;else tg.z-=1.3*Math.sin(p*Math.PI)}
   if(keys.c&&!camOn)tg.set(a.s*.2,1.95,-.4);
   tg.y=Math.max(tg.y,.5);tg.z=Math.min(tg.z,-.35);
   const d=tg.clone().sub(sh);if(d.length()>1.25)tg=sh.clone().add(d.setLength(1.25));
+  if(!isFinite(tg.x+tg.y+tg.z))tg.copy(a.g);
+  if(te){te.y=Math.max(te.y,.4);te.z=Math.min(te.z,-.08);
+   const de=te.clone().sub(sh);if(de.length()>.64)te.copy(sh).add(de.setLength(.64));
+   if(!isFinite(te.x+te.y+te.z))te.copy(a.e);
+   a.e.lerp(te,Math.min(1,dt*16));
+   const dg=tg.clone().sub(a.e);if(dg.length()>.7)tg=a.e.clone().add(dg.setLength(.7));}
+  a.useE=!!te;
   a.g.lerp(tg,Math.min(1,dt*16));
+  if(!isFinite(a.g.x+a.g.y+a.g.z))a.g.set(a.s*.3,1.4,-.4);
+  if(!isFinite(a.e.x+a.e.y+a.e.z))a.e.set(a.s*.4,1.2,-.1);
   drawArm(a,sh,1);
-  // hit check
+  // hit check: gloves and elbows
   a.cd-=dt;
-  const h=(a.h=a.h||[]);h.push({t:now,z:a.g.z});while(h.length>2&&now-h[0].t>150)h.shift();
-  const vz=h.length>2?(h[0].z-a.g.z)/Math.max(.03,(now-h[0].t)/1000):0;
-  if(running&&a.cd<=0&&vz>2.4&&a.g.z<-1.05&&Math.abs(a.g.x-opp.g.position.x)<.6&&a.g.y>.9&&a.g.y<2.4){
-   a.cd=.35;const dmg=4+Math.min(vz,9);hpO=Math.max(0,hpO-dmg);oHit=.25;shake=.15;
-   if(hpO<=0)end(true)}
+  const pg=track(a,'hg',a.g,now,dt),pe=te?track(a,'he',a.e,now,dt):0;
+  const inXY=q=>Math.abs(q.x-ox)<.65&&q.y>.8&&q.y<2.5;
+  let hit=0;
+  if(running&&a.cd<=0){
+   if(pg>1.5&&a.g.z<oz+.5&&inXY(a.g))hit=4+Math.min(pg,8);
+   else if(pe>1.3&&a.e.z<oz+.65&&inXY(a.e))hit=6+Math.min(pe,6);
+  }
+  if(hit){a.cd=.35;a.pkhg=0;a.pkhe=0;hpO=Math.max(0,hpO-hit);oHit=.25;shake=.15;if(hpO<=0)end(true)}
  });
  // opponent
- oX=Math.sin(t0*.9)*.45;opp.g.position.x=oX;
- const ox=oX,oz=-1.55+(oHit>0?-.12:0);opp.g.position.z=oz;
  oHit=Math.max(0,oHit-dt);
  opp.mats.forEach(m=>m.emissive.setHex(oHit>0?0xff2222:0));
  if(running){oT-=dt;
@@ -211,7 +235,7 @@ function update(dt,now){
   const sh=V(ox+a.s*.42,1.7,oz);
   let tg=V(ox+a.s*.28,1.8,oz+.4);
   if(oArm===i&&oState==='wind')tg=V(ox+a.s*.5,1.65,oz+.05);
-  if(oArm===i&&oState==='strike'){const p=1-oT/.22;tg=V(a.s*.15,1.85,oz+.1+p*1.0);
+  if(oArm===i&&oState==='strike'){const p=1-oT/.22;tg=V(a.s*.15,1.85,Math.min(oz+.1+p*1.0,-.3));
    if(running&&p>.6&&!opp._hit){opp._hit=true;const dmg=guardOn?2:9;hpY=Math.max(0,hpY-dmg);
     $('flash').style.opacity=guardOn?.12:.45;setTimeout(()=>$('flash').style.opacity=0,120);shake=guardOn?.05:.2;
     if(hpY<=0)end(false)}}
@@ -220,6 +244,7 @@ function update(dt,now){
  // camera shake
  shake=Math.max(0,shake-dt*.6);
  camera.position.set(baseCam.x+(Math.random()-.5)*shake,baseCam.y+(Math.random()-.5)*shake,baseCam.z);
+ if(running){if(hpO<=.01)end(true);else if(hpY<=.01)end(false)}
  // HUD
  $('you').querySelector('i').style.width=hpY+'%';$('opp').querySelector('i').style.width=hpO+'%';
 }
