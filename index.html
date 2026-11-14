@@ -133,19 +133,14 @@ function onRes(r){
  const lm=r.poseLandmarks;const c=$('ov2').getContext('2d');c.clearRect(0,0,c.canvas.width,c.canvas.height);
  if(!lm){return}
  cam.lastSeen=performance.now();
- const sw=Math.max(.05,Math.hypot(lm[11].x-lm[12].x,lm[11].y-lm[12].y));
- const arm=(i,S,E,W)=>{const sh=lm[S],el=lm[E],wr=lm[W];
-  if((wr.visibility??1)<.3||(el.visibility??1)<.3)return cam[i];
-  const su=Math.hypot(el.x-sh.x,el.y-sh.y)/sw,sf=Math.hypot(wr.x-el.x,wr.y-el.y)/sw;
-  const m=LEN[i];m.u=Math.max(m.u*.9995,su,.5);m.f=Math.max(m.f*.9995,sf,.5);
-  const du=Math.sqrt(Math.max(0,m.u*m.u-su*su)),df=Math.sqrt(Math.max(0,m.f*m.f-sf*sf));
-  const sg=d=>d<-.2?-.3:1;
-  const geo=du*sg((sh.z-el.z)/sw)+df*sg((el.z-wr.z)/sw);
-  const mpz=(sh.z-wr.z)/sw;
-  const dz=v=>Math.abs(v)<.15?0:v-Math.sign(v)*.15;
-  const dzu=(sh.z-el.z)/sw;
-  const o={x:(sh.x-wr.x)/sw,y:(sh.y-wr.y)/sw,z:dz(.6*geo+.4*mpz),ex:(sh.x-el.x)/sw,ey:(sh.y-el.y)/sw,ez:dz(.6*du*sg(dzu)+.4*dzu)};
-  return Object.values(o).every(isFinite)?o:cam[i];
+ const wl=r.poseWorldLandmarks,asp=c.canvas.width/c.canvas.height;
+ const P=k=>wl&&wl[k]?wl[k]:{x:lm[k].x*asp,y:lm[k].y,z:lm[k].z*asp};
+ const nv=(x,y,z)=>{const l=Math.hypot(x,y,z);return l>1e-6&&isFinite(l)?{x:x/l,y:y/l,z:z/l}:null};
+ const arm=(i,S,E,W)=>{
+  if((lm[W].visibility??1)<.3||(lm[E].visibility??1)<.3)return cam[i];
+  const sh=P(S),el=P(E),wr=P(W);
+  const u=nv(sh.x-el.x,sh.y-el.y,el.z-sh.z),f=nv(el.x-wr.x,el.y-wr.y,wr.z-el.z);
+  return u&&f?{u,f}:cam[i];
  };
  cam.L=arm('L',11,13,15);cam.R=arm('R',12,14,16);
  const nose=lm[0];
@@ -163,7 +158,7 @@ async function startCam(){
   const pose=new Pose({locateFile:f=>'https://cdn.jsdelivr.net/npm/@mediapipe/pose@0.5.1675469404/'+f});
   pose.setOptions({modelComplexity:1,smoothLandmarks:true,minDetectionConfidence:.5,minTrackingConfidence:.5});
   pose.onResults(onRes);await pose.initialize();
-  status('Camera on. Keep your upper body in frame and move your arms around for a few seconds to calibrate.');
+  status('Camera on. Your character copies your arms exactly. Keep your upper body in frame.');
   const loop=async()=>{if(v.readyState>=2)await pose.send({image:v});requestAnimationFrame(loop)};loop();
  }catch(e){console.warn(e);status('Camera unavailable. Keyboard: Z / X punch, C guard.')}
 }
@@ -194,24 +189,25 @@ function update(dt,now){
  const guardCount=()=>keys.c?2:player.arms.filter(a=>a.guard).length;
  player.arms.forEach(a=>{
   const sh=V(a.s*.42,1.7,0);
-  let tg,te=null;
+  let tg,te=null,fv=null;
   if(camOn){const r=a.s<0?cam.L:cam.R;
-   tg=V(sh.x+r.x*.85,sh.y+r.y*.85,sh.z-.1-r.z*.85);
-   te=V(sh.x+r.ex*.85,sh.y+r.ey*.85,sh.z-.05-r.ez*.85);}
+   te=sh.clone().add(V(r.u.x,r.u.y,r.u.z).multiplyScalar(.62));
+   fv=V(r.f.x,r.f.y,r.f.z);
+   tg=te.clone().add(fv.clone().multiplyScalar(.62));}
   else tg=V(a.s*.3,1.45,-.35);
   const kp=a.s<0?'z':'x';
   if(keys[kp]>0){keys[kp]+=dt;const p=keys[kp]/.3;if(p>=1)keys[kp]=0;else tg.z-=1.3*Math.sin(p*Math.PI)}
   if(keys.c&&!camOn)tg.set(a.s*.2,1.95,-.4);
-  tg.y=Math.max(tg.y,.5);if(Math.abs(tg.x)<.58&&tg.y>.8&&tg.y<2.1)tg.z=Math.min(tg.z,-.35);
+  tg.y=Math.max(tg.y,camOn?.1:.5);if(!camOn&&Math.abs(tg.x)<.58&&tg.y>.8&&tg.y<2.1)tg.z=Math.min(tg.z,-.35);
   const d=tg.clone().sub(sh);if(d.length()>1.3)tg=sh.clone().add(d.setLength(1.3));
   if(!isFinite(tg.x+tg.y+tg.z))tg.copy(a.g);
-  if(te){te.y=Math.max(te.y,.4);te.z=Math.min(te.z,.1);
+  if(te){te.y=Math.max(te.y,.1);
    const de=te.clone().sub(sh);if(de.length()>.64)te.copy(sh).add(de.setLength(.64));
    if(!isFinite(te.x+te.y+te.z))te.copy(a.e);
-   a.e.lerp(te,Math.min(1,dt*16));
-   const dg=tg.clone().sub(a.e);if(dg.length()>.75)tg=a.e.clone().add(dg.setLength(.75));}
+   a.e.lerp(te,Math.min(1,dt*22));
+   if(fv){tg=a.e.clone().add(fv.multiplyScalar(.62));tg.y=Math.max(tg.y,.1);}}
   a.useE=!!te;
-  a.g.lerp(tg,Math.min(1,dt*16));
+  a.g.lerp(tg,Math.min(1,dt*(camOn?26:16)));
   if(!isFinite(a.g.x+a.g.y+a.g.z))a.g.set(a.s*.3,1.4,-.4);
   if(!isFinite(a.e.x+a.e.y+a.e.z))a.e.set(a.s*.4,1.2,-.1);
   drawArm(a,sh,1);
