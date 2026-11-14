@@ -13,6 +13,7 @@ canvas#c{display:block;width:100%;height:100%}
 #cam{position:fixed;left:12px;bottom:12px;width:min(44vw,440px);aspect-ratio:4/3;border-radius:10px;overflow:hidden;border:2px solid #ffffff33;background:#000;cursor:pointer;transition:width .2s}#cam.big{width:min(80vw,760px)}
 #cam video,#cam canvas{position:absolute;inset:0;width:100%;height:100%;transform:scaleX(-1);object-fit:cover}
 #status{position:fixed;right:12px;bottom:12px;max-width:50%;font-size:13px;opacity:.85;text-align:right}
+#gtag{position:fixed;top:48px;left:50%;transform:translateX(-50%);font-weight:800;letter-spacing:.15em;font-size:14px;padding:4px 14px;border-radius:20px;background:#4dd37a;color:#062;opacity:0;transition:opacity .12s;pointer-events:none}
 #flash{position:fixed;inset:0;background:#f00;opacity:0;pointer-events:none;transition:opacity .25s}
 #ov{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000000b8;text-align:center;padding:20px}
 #ov h1{font-size:44px;margin:0 0 10px}#ov p{max-width:480px;line-height:1.5;opacity:.85;margin:6px 0}
@@ -22,10 +23,10 @@ button{margin-top:18px;font-size:18px;padding:12px 30px;border:0;border-radius:1
 <div id="hud"><div class="bar" id="you"><b>You</b><div><i></i></div></div><div class="bar" id="opp"><b>Opponent</b><div><i></i></div></div></div>
 <div id="cam"><video id="vid" playsinline muted></video><canvas id="ov2" width="200" height="150"></canvas></div>
 <div id="status">Waiting to start…</div>
-<div id="flash"></div>
+<div id="flash"></div><div id="gtag">GUARD</div>
 <div id="ov"><h1 style="display:flex;align-items:center;gap:12px"><svg width="72" height="72" viewBox="0 0 64 64" aria-hidden="true"><path d="M18 30c0-12 8-20 20-20s16 8 16 18c0 6-2 10-6 13v8H24v-8c-4-2-6-6-6-11z" fill="#e53935"/><path d="M14 30c-4 2-4 10 2 12 3 1 6-2 6-6z" fill="#b71c1c"/><rect x="22" y="48" width="26" height="9" rx="2" fill="#fff"/></svg> Cam Boxing</h1>
 <p>Stand back so your head, shoulders and arms are visible. Your character copies your arms: raise your right hand and he raises his right arm.</p>
-<p><b>Punch</b> by thrusting your fist toward the camera. <b>Block</b> by raising both fists in front of your face.</p>
+<p><b>Punch</b> by thrusting your fist toward the camera. <b>Block</b> by keeping your fists up near your face, not pointed at the opponent. Guard with both hands to take almost no damage.</p>
 <p><b>Elbow strikes</b> count too, but only when he steps in close. Click the camera preview to make it bigger.</p><p style="font-size:13px">No camera? Keyboard works too: Z / X punch, C to guard.</p>
 <button id="go">Start fight</button></div>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
@@ -141,8 +142,9 @@ function onRes(r){
   const sg=d=>d<-.2?-.3:1;
   const geo=du*sg((sh.z-el.z)/sw)+df*sg((el.z-wr.z)/sw);
   const mpz=(sh.z-wr.z)/sw;
+  const dz=v=>Math.abs(v)<.15?0:v-Math.sign(v)*.15;
   const dzu=(sh.z-el.z)/sw;
-  const o={x:(sh.x-wr.x)/sw,y:(sh.y-wr.y)/sw,z:.6*geo+.4*mpz,ex:(sh.x-el.x)/sw,ey:(sh.y-el.y)/sw,ez:.6*du*sg(dzu)+.4*dzu};
+  const o={x:(sh.x-wr.x)/sw,y:(sh.y-wr.y)/sw,z:dz(.6*geo+.4*mpz),ex:(sh.x-el.x)/sw,ey:(sh.y-el.y)/sw,ez:dz(.6*du*sg(dzu)+.4*dzu)};
   return Object.values(o).every(isFinite)?o:cam[i];
  };
  cam.L=arm('L',11,13,15);cam.R=arm('R',12,14,16);
@@ -180,7 +182,7 @@ function track(a,key,pos,now,dt){
  while(h.length>2&&now-h[0].t>130)h.shift();
  let v=0;
  if(h.length>2){const o=h[0],ds=Math.max(.03,(now-o.t)/1000);
-  const dir=V(opp.g.position.x-pos.x,0,opp.g.position.z-pos.z).normalize();
+  const dir=V(opp.g.position.x-pos.x,1.7-pos.y,opp.g.position.z-pos.z).normalize();
   v=pos.clone().sub(o.p).dot(dir)/ds;}
  const k='pk'+key;a[k]=Math.max(isFinite(v)?v:0,(a[k]||0)-dt*5);return a[k];
 }
@@ -189,25 +191,25 @@ function update(dt,now){
  oX=Math.sin(t0*.9)*.45;opp.g.position.x=oX;
  const oz=-1.5+.5*(.5+.5*Math.sin(t0*.4))+(oHit>0?-.12:0);opp.g.position.z=oz;const ox=oX;
  const camOn=now-cam.lastSeen<500&&!!cam.L&&!!cam.R;
- const guardOn=(camOn&&cam.guard)||keys.c;
+ const guardCount=()=>keys.c?2:player.arms.filter(a=>a.guard).length;
  player.arms.forEach(a=>{
   const sh=V(a.s*.42,1.7,0);
   let tg,te=null;
   if(camOn){const r=a.s<0?cam.L:cam.R;
-   tg=V(sh.x+r.x*.65,sh.y+r.y*.65,sh.z-.3-r.z*.65*1.3);
-   te=V(sh.x+r.ex*.65,sh.y+r.ey*.65,sh.z-.15-r.ez*.65*1.3);}
+   tg=V(sh.x+r.x*.85,sh.y+r.y*.85,sh.z-.1-r.z*.85);
+   te=V(sh.x+r.ex*.85,sh.y+r.ey*.85,sh.z-.05-r.ez*.85);}
   else tg=V(a.s*.3,1.45,-.35);
   const kp=a.s<0?'z':'x';
   if(keys[kp]>0){keys[kp]+=dt;const p=keys[kp]/.3;if(p>=1)keys[kp]=0;else tg.z-=1.3*Math.sin(p*Math.PI)}
   if(keys.c&&!camOn)tg.set(a.s*.2,1.95,-.4);
-  tg.y=Math.max(tg.y,.5);tg.z=Math.min(tg.z,-.35);
-  const d=tg.clone().sub(sh);if(d.length()>1.25)tg=sh.clone().add(d.setLength(1.25));
+  tg.y=Math.max(tg.y,.5);if(Math.abs(tg.x)<.58&&tg.y>.8&&tg.y<2.1)tg.z=Math.min(tg.z,-.35);
+  const d=tg.clone().sub(sh);if(d.length()>1.3)tg=sh.clone().add(d.setLength(1.3));
   if(!isFinite(tg.x+tg.y+tg.z))tg.copy(a.g);
-  if(te){te.y=Math.max(te.y,.4);te.z=Math.min(te.z,-.08);
+  if(te){te.y=Math.max(te.y,.4);te.z=Math.min(te.z,.1);
    const de=te.clone().sub(sh);if(de.length()>.64)te.copy(sh).add(de.setLength(.64));
    if(!isFinite(te.x+te.y+te.z))te.copy(a.e);
    a.e.lerp(te,Math.min(1,dt*16));
-   const dg=tg.clone().sub(a.e);if(dg.length()>.7)tg=a.e.clone().add(dg.setLength(.7));}
+   const dg=tg.clone().sub(a.e);if(dg.length()>.75)tg=a.e.clone().add(dg.setLength(.75));}
   a.useE=!!te;
   a.g.lerp(tg,Math.min(1,dt*16));
   if(!isFinite(a.g.x+a.g.y+a.g.z))a.g.set(a.s*.3,1.4,-.4);
@@ -216,6 +218,7 @@ function update(dt,now){
   // hit check: gloves and elbows
   a.cd-=dt;
   const pg=track(a,'hg',a.g,now,dt),pe=te?track(a,'he',a.e,now,dt):0;
+  a.guard=Math.hypot(a.g.x,a.g.y-1.9)<.7&&(sh.z-a.g.z)<.75&&pg<1.2;
   const inXY=q=>Math.abs(q.x-ox)<.65&&q.y>.8&&q.y<2.5;
   let hit=0;
   if(running&&a.cd<=0){
@@ -236,7 +239,7 @@ function update(dt,now){
   let tg=V(ox+a.s*.28,1.8,oz+.4);
   if(oArm===i&&oState==='wind')tg=V(ox+a.s*.5,1.65,oz+.05);
   if(oArm===i&&oState==='strike'){const p=1-oT/.22;tg=V(a.s*.15,1.85,Math.min(oz+.1+p*1.0,-.3));
-   if(running&&p>.6&&!opp._hit){opp._hit=true;const dmg=guardOn?2:9;hpY=Math.max(0,hpY-dmg);
+   if(running&&p>.6&&!opp._hit){opp._hit=true;const gc=guardCount(),dmg=gc>=2?2:gc===1?5:9,guardOn=gc>0;hpY=Math.max(0,hpY-dmg);
     $('flash').style.opacity=guardOn?.12:.45;setTimeout(()=>$('flash').style.opacity=0,120);shake=guardOn?.05:.2;
     if(hpY<=0)end(false)}}
   a.g.lerp(tg,Math.min(1,dt*(oState==='strike'?30:12)));drawArm(a,sh,-1)});
@@ -245,6 +248,7 @@ function update(dt,now){
  shake=Math.max(0,shake-dt*.6);
  camera.position.set(baseCam.x+(Math.random()-.5)*shake,baseCam.y+(Math.random()-.5)*shake,baseCam.z);
  if(running){if(hpO<=.01)end(true);else if(hpY<=.01)end(false)}
+ $('gtag').style.opacity=guardCount()>0?1:0;
  // HUD
  $('you').querySelector('i').style.width=hpY+'%';$('opp').querySelector('i').style.width=hpO+'%';
 }
